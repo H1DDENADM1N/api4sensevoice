@@ -1,48 +1,146 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>WebSocket Audio Transcription</title>
     <style>
-        #transcriptionResult {
-            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #fixedContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.5);
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: right;
+            z-index: 1000;
+        }
+
+        #serverIP {
+            width: 80px;
+        }
+
+        #serverPort {
+            width: 50px;
+        }
+
+        #recordButton {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 0, 0, 0.5), white);
+        }
+
+        #recordButton.recording {
+            background: radial-gradient(circle, rgba(255, 0, 0, 1), white);
+            color: white;
+        }
+
+        #transcriptionResultTextarea {
+            white-space: pre-wrap;
             background-color: #f5f5f5;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
-            font-family: monospace;
+            font-size: 50px;
+            overflow-y: auto;
+            max-height: 100vh;
+            height: 100vh;
+            width: 100%;
+            max-width: 100%;
         }
-        #recordButton.recording {
-            background-color: red;
-            color: white;
+
+        #fontsizeSlider input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            z-index: 1000;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999;
+        }
+
+        #fontsizeSlider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            background: rgba(0, 0, 0, 1);
+            border-radius: 50%;
+            z-index: 1000;
+        }
+
+        #fontsizeSlider input[type="range"]::-moz-range-thumb {
+            width: 10px;
+            height: 10px;
+            background: rgba(0, 0, 0, 1);
+            border-radius: 50%;
+            z-index: 1000;
         }
     </style>
 </head>
+
+
 <body>
-    <div>
-        <button id="recordButton">Start Recording</button>
-        <label>
-            language: 
-            <input id="lang" type="text" value="auto" />
-        </label>
-        <label>
-            <input type="checkbox" id="speakerVerification"> Speaker Verification
-        </label>
-        <hr />
-        Transcription result will be displayed below:
-        <p id="transcriptionResult"></p>
+    <div id="fixedContainer" onmouseover="showConfigOptions()" onmouseout="hideConfigOptions()">
+        <button id="recordButton">开始录音</button>
+        <div id="configContainer">
+            <label>语言:
+                <select id="lang">
+                    <option value="auto">🌐 自动</option>
+                    <option value="zh">🇨🇳 中文普通话</option>
+                    <option value="yue">🇨🇳 粤语</option>
+                    <option value="en">🇬🇧 English</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="ko">🇰🇷 한국어</option>
+                </select>
+            </label>
+            <br>
+            <label>
+                <input type="checkbox" id="speakerVerification">说话人验证
+            </label>
+            <br>
+            <label>
+                <input type="text" id="serverIP" value="127.0.0.1">
+                <input type="number" id="serverPort" value="8888">
+            </label>
+            <br>
+            <button id="saveToTxtButton" onclick="saveToTxt(transcriptionResultTextarea.value)">保存记录</button>
+            <button id="copyToClipboardButton"
+                onclick="navigator.clipboard.writeText(transcriptionResultTextarea.value)">复制记录</button>
+            <a href="https://github.com/H1DDENADM1N/api4sensevoice" target="_blank">Github</a>
+        </div>
+    </div>
+    <textarea id="transcriptionResultTextarea" rows="4" cols="50"
+        placeholder="转录结果将在此处显示并自动滚动到底部。若要重新开始录音，请点击右上侧开始录音，更改“语言”和“说话人验证”选项后需要重新开始录音以生效。右下角滑条可调整转录结果字体大小。"></textarea>
+    <div id="fontsizeSlider">
+        <input type="range" min="10" max="100" value="50" id="fontsize">
     </div>
 </body>
+
+
 <script>
     var recordButton = document.getElementById('recordButton');
-    var transcriptionResult = document.getElementById('transcriptionResult');
+    var transcriptionResultTextarea = document.getElementById('transcriptionResultTextarea');
     navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia;
     var ws = null;
+    var serverIP = null;
+    var serverPort = null;
     var record = null;
     var timeInte = null;
     var isRecording = false;
 
-    recordButton.onclick = function() {
+    recordButton.onclick = function () {
         if (!isRecording) {
             startRecording();
         } else {
@@ -65,20 +163,23 @@
         }
         var queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
 
-        ws = new WebSocket(`wss://your_wss_server_address/ws/transcribe${queryString}`);
+        // ws = new WebSocket(`ws://127.0.0.1:8888/ws/transcribe${queryString}`);
+        serverIP = document.getElementById("serverIP").value;
+        serverPort = document.getElementById("serverPort").value;
+        ws = new WebSocket(`ws://${serverIP}:${serverPort}/ws/transcribe${queryString}`);
         ws.binaryType = 'arraybuffer';
 
-        ws.onopen = function(event) {
+        ws.onopen = function (event) {
             console.log('WebSocket connection established');
             record.start();
-            timeInte = setInterval(function() {
-                if(ws.readyState === 1) {
+            timeInte = setInterval(function () {
+                if (ws.readyState === 1) {
                     var audioBlob = record.getBlob();
                     console.log('Blob size: ', audioBlob.size);
 
                     // Read the Blob content for debugging
                     var reader = new FileReader();
-                    reader.onloadend = function() {
+                    reader.onloadend = function () {
                         console.log('Blob content: ', new Uint8Array(reader.result));
                         ws.send(audioBlob);
                         console.log('Sending audio data');
@@ -89,29 +190,34 @@
             }, 500);
         };
 
-        ws.onmessage = function(evt) {
+        ws.onmessage = function (evt) {
             console.log('Received message: ' + evt.data);
             try {
-                resJson = JSON.parse(evt.data)
+                resJson = JSON.parse(evt.data);
                 if (resJson.code == 0) {
-                    var jsonResponse = JSON.stringify(resJson, null, 4);
-                    transcriptionResult.textContent += "\n" + (resJson.data || 'No speech recognized');
+                    if (transcriptionResultTextarea.value.length > 0) {
+                        transcriptionResultTextarea.value += "\n" + (resJson.data || 'No speech recognized');
+                    } else {
+                        transcriptionResultTextarea.value = (resJson.data || 'No speech recognized');
+                    }
+                    scrollToBottom();
                 }
             } catch (e) {
                 console.error('Failed to parse response data', e);
-                transcriptionResult.textContent += "\n" + evt.data;
+                transcriptionResultTextarea.value += "\n" + evt.data;
+                scrollToBottom();
             }
         };
 
-        ws.onclose = function() {
+        ws.onclose = function () {
             console.log('WebSocket connection closed');
         };
 
-        ws.onerror = function(error) {
+        ws.onerror = function (error) {
             console.error('WebSocket error: ' + error);
         };
 
-        recordButton.textContent = "Stop Recording";
+        recordButton.textContent = "停止录音";
         recordButton.classList.add("recording");
         isRecording = true;
     }
@@ -123,9 +229,41 @@
             record.stop();
             clearInterval(timeInte);
         }
-        recordButton.textContent = "Start Recording";
+        recordButton.textContent = "开始录音";
         recordButton.classList.remove("recording");
         isRecording = false;
+    }
+
+    function saveToTxt(content) {
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
+        const filename = `(${timestamp})${content.substring(0, 10)}.txt`;
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+
+    function scrollToBottom() {
+        var transcriptionResultTextarea = document.getElementById('transcriptionResultTextarea');
+        transcriptionResultTextarea.scrollTop = transcriptionResultTextarea.scrollHeight;
+    }
+
+    function showConfigOptions() {
+        document.getElementById('configContainer').style.display = 'block';
+        document.getElementById('fixedContainer').style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+        document.getElementById('fixedContainer').style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+    }
+
+    function hideConfigOptions() {
+        if (document.activeElement !== document.getElementById('lang')) {
+            document.getElementById('configContainer').style.display = 'none';
+        }
+        document.getElementById('fixedContainer').style.backgroundColor = 'transparent';
+        document.getElementById('fixedContainer').style.boxShadow = 'none';
     }
 
     function init(rec) {
@@ -137,16 +275,23 @@
     } else {
         navigator.getUserMedia(
             { audio: true },
-            function(mediaStream) {
+            function (mediaStream) {
                 init(new Recorder(mediaStream));
             },
-            function(error) {
+            function (error) {
                 console.log(error);
             }
         );
     }
 
-    var Recorder = function(stream) {
+    var currentFontSize = 50;
+    var fontsizeSlider = document.getElementById('fontsize');
+    fontsizeSlider.oninput = function () {
+        currentFontSize = this.value;
+        transcriptionResultTextarea.style.fontSize = currentFontSize + 'px';
+    };
+
+    var Recorder = function (stream) {
         var sampleBits = 16; // Sample bits
         var inputSampleRate = 48000; // Input sample rate
         var outputSampleRate = 16000; // Output sample rate
@@ -159,15 +304,15 @@
             buffer: [],
             inputSampleRate: inputSampleRate,
             inputSampleBits: sampleBits,
-            clear: function() {
+            clear: function () {
                 this.buffer = [];
                 this.size = 0;
             },
-            input: function(data) {
+            input: function (data) {
                 this.buffer.push(new Float32Array(data));
                 this.size += data.length;
             },
-            encodePCM: function() {
+            encodePCM: function () {
                 var bytes = new Float32Array(this.size);
                 var offset = 0;
                 for (var i = 0; i < this.buffer.length; i++) {
@@ -186,20 +331,20 @@
             }
         };
 
-        this.start = function() {
+        this.start = function () {
             audioInput.connect(recorder);
             recorder.connect(context.destination);
         };
 
-        this.stop = function() {
+        this.stop = function () {
             recorder.disconnect();
         };
 
-        this.getBlob = function() {
+        this.getBlob = function () {
             return audioData.encodePCM();
         };
 
-        this.clear = function() {
+        this.clear = function () {
             audioData.clear();
         };
 
@@ -226,7 +371,7 @@
             return result;
         }
 
-        recorder.onaudioprocess = function(e) {
+        recorder.onaudioprocess = function (e) {
             console.log('onaudioprocess called');
             var resampledData = downsampleBuffer(e.inputBuffer.getChannelData(0), inputSampleRate, outputSampleRate);
             audioData.input(resampledData);
@@ -234,4 +379,5 @@
     };
 
 </script>
+
 </html>
