@@ -159,28 +159,28 @@ def contains_chinese_english_number(s: str) -> bool:
 
 sv_pipeline = pipeline(
     task='speaker-verification',
-    model='iic/speech_eres2net_large_sv_zh-cn_3dspeaker_16k',
+    model='./models/speech_eres2net_large_sv_zh-cn_3dspeaker_16k',
     model_revision='v1.0.0'
 )
 
 asr_pipeline = pipeline(
     task=Tasks.auto_speech_recognition,
-    model='iic/SenseVoiceSmall',
+    model='./models/SenseVoiceSmall',
     model_revision="master",
     device="cuda:0",
     disable_update=True
 )
 
 model_asr = AutoModel(
-    model="iic/SenseVoiceSmall",
+    model="./models/SenseVoiceSmall",
     trust_remote_code=True,
-    remote_code="./model.py",    
+    remote_code="./model.py",
     device="cuda:0",
     disable_update=True
 )
 
 model_vad = AutoModel(
-    model="fsmn-vad",
+    model="./models/speech_fsmn_vad_zh-cn-16k-common-pytorch",
     model_revision="v2.0.4",
     disable_pbar = True,
     max_end_silence_time=500,
@@ -392,4 +392,5 @@ if __name__ == "__main__":
     # parser.add_argument('--keyfile', type=str, default='path_to_your_SSL_certificate_file.key', help='SSL key file')
     args = parser.parse_args()
     # uvicorn.run(app, host="0.0.0.0", port=args.port, ssl_certfile=args.certfile, ssl_keyfile=args.keyfile)
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    # uvicorn.run(app, host="0.0.0.0", port=args.port)
+    uvicorn.run(app, host="0.0.0.0", port=8888)
